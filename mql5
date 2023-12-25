@@ -1,0 +1,77 @@
+
+//+------------------------------------------------------------------+
+//|                                                   Uber Trade Manager|
+//|                                    Copyright © 2021 Forex Robot Easy Team|
+//|                                                                  forexroboteasy.com|
+//+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+//|        Uber Trade Manager - Fast and Efficient Trade Execution   |
+//|                        Simplified Forex Trading Operations        |
+//+------------------------------------------------------------------+
+
+// Global variables
+input double riskPercentage = 2.0; // Risk percentage per trade
+input double rewardRatio = 2.0; // Risk-to-Reward ratio
+input double trailStopRatio = 0.5; // Trail stop ratio
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void OnTick()
+{
+   // Check if there are any pending orders
+   if (OrdersTotal() > 0)
+      return;
+   
+   // Check if user clicked on the chart
+   if (ChartEventInteger(ChartEventObjectClick) == 0)
+      return;
+   
+   // Get the clicked object coordinates
+   double x, y;
+   ChartGetInteger(ChartID(), CHART_CLICK_X, 0, x);
+   ChartGetInteger(ChartID(), CHART_CLICK_Y, 0, y);
+   
+   // Check if user clicked within the chart area
+   if (y < ChartGetInteger(ChartID(), CHART_HEIGHT_IN_PIXELS))
+      return;
+   
+   // Calculate lot size based on risk percentage
+   double lotSize = AccountBalance() * riskPercentage / 100.0 / SymbolInfoDouble(_Symbol, SYMBOL_MARGIN_REQUIRED);
+   
+   // Calculate take profit and stop loss levels
+   double entryPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   double stopLoss = entryPrice - SymbolInfoDouble(_Symbol, SYMBOL_POINT) * 100.0;
+   double takeProfit = entryPrice + SymbolInfoDouble(_Symbol, SYMBOL_POINT) * 100.0 * rewardRatio;
+   
+   // Open a new position with calculated parameters
+   int ticket = OrderSend(_Symbol, OP_BUY, lotSize, entryPrice, 0, stopLoss, takeProfit, 'Uber Trade Manager', 0, 0, Green);
+   
+   // Check if the order was placed successfully
+   if (ticket <= 0)
+   {
+      Print('Failed to open a new position. Error code:', GetLastError());
+      return;
+   }
+   
+   // Set trail stop loss
+   double trailStopLoss = entryPrice - SymbolInfoDouble(_Symbol, SYMBOL_POINT) * 100.0 * trailStopRatio;
+   OrderModify(ticket, 0, trailStopLoss, 0, 0, Blue);
+}
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+   // Close all open positions before shutting down
+   for (int i = OrdersTotal() - 1; i >= 0; i--)
+   {
+      if (OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
+      {
+         if (OrderSymbol() == _Symbol && OrderType() <= OP_SELL)
+            OrderClose(OrderTicket(), OrderLots(), Bid, 0, Red);
+      }
+   }
+}
